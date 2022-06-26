@@ -5,5 +5,5 @@ This is a continuation of my [Emulated Woz Machine](https://github.com/st3fan/ew
 
 There is nothing here to see yet except some random code that I'm having fun with. It is also a _very slow_ Rust learning project for me.
 
-It will probably take another 7 years to turn this into something that works well enough to play Hard Hat Mac.
+It will probably take another 7 years to turn this into something that works well enough to play [Burger Time](https://stefan.arentz.ca/posts/2017-09-19-ewmupdateletsgetcookin/).
 
