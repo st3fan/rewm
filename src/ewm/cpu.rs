@@ -1,6 +1,6 @@
 // The MIT License (MIT)
 //
-// Copyright (c) 2022 Stefan Arentz - http://github.com/st3fan/rewm
+// Copyright (c) 2015 Stefan Arentz - http://github.com/st3fan/ewm
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,21 +20,29 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-mod ewm;
-use ewm::{Computer, CPUError};
+#[derive(Debug)]
+pub struct CPU {
+    pub pc: u16,
+    pub sp: u8,
+    pub a: u8,
+    pub x: u8,
+    pub y: u8,
+    pub n: bool,
+    pub z: bool,
+    pub v: bool
+}
 
-fn main() {
-    let mut computer = Computer::new();
-    match computer.run() {
-        Ok(_) => { },
-        Err(CPUError::IllegalOpcode) => {
-            eprintln!("CPU Error: illegal opcode {} at {}", computer.get_byte(computer.cpu.pc), computer.cpu.pc);
-            std::process::exit(1);
-        }
-        Err(CPUError::Break) => {
-            eprintln!("CPU Error: break at {}", computer.cpu.pc);
-            std::process::exit(1);
-        }
-    };
+impl CPU {
+    pub fn new() -> Self {
+        CPU { pc: 0x0400, sp: 0xff, a: 0, x: 0, y: 0, n: false, z: false, v: false }
+    }
+}
+
+//
+
+#[derive(Debug, PartialEq)]
+pub enum CPUError {
+    Break,
+    IllegalOpcode,
 }
 
