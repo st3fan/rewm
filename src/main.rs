@@ -21,18 +21,18 @@
 // SOFTWARE.
 
 mod ewm;
-use ewm::{Computer, CPUError};
+use ewm::{CPU, CPUError};
 
 fn main() {
-    let mut computer = Computer::new();
-    match computer.run() {
+    let mut cpu = CPU::new();
+    match cpu.run() {
         Ok(_) => { },
         Err(CPUError::IllegalOpcode) => {
-            eprintln!("CPU Error: illegal opcode {} at {}", computer.get_byte(computer.cpu.pc), computer.cpu.pc);
+            eprintln!("CPU Error: illegal opcode {} at {}", cpu.get_byte(cpu.pc), cpu.pc);
             std::process::exit(1);
         }
         Err(CPUError::Break) => {
-            eprintln!("CPU Error: break at {}", computer.cpu.pc);
+            eprintln!("CPU Error: break at {}", cpu.pc);
             std::process::exit(1);
         }
     };
