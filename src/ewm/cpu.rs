@@ -28,9 +28,11 @@ pub struct CPU {
     pub a: u8,
     pub x: u8,
     pub y: u8,
+
     pub n: bool,
-    pub z: bool,
     pub v: bool,
+    pub z: bool,
+    pub c: bool,
 
     pub ram: Vec<u8>,
 }
@@ -39,7 +41,12 @@ pub struct CPU {
 
 impl CPU {
     pub fn new() -> Self {
-        CPU { pc: 0x0400, sp: 0xff, a: 0, x: 0, y: 0, n: false, z: false, v: false, ram: vec![0; 64*1024] }
+        CPU {
+            pc: 0x0400, sp: 0xff,
+            a: 0, x: 0, y: 0,
+            n: false, v: false, z: false, c: false,
+            ram: vec![0; 64*1024]
+        }
     }
 
     pub fn get_byte(&self, addr: u16) -> u8 {
@@ -321,6 +328,84 @@ impl CPU {
                 self.eor(self.mem_get_byte_indy(oper));
             }
 
+            // Comparisons
+            
+            // CMP
+
+            0xc9 => { // CMP imm
+                let oper = self.fetch_byte();
+                self.cmp(oper);
+            }
+
+            0xc5 => { // CMP zpg
+                let oper = self.fetch_byte();
+                self.cmp(self.mem_get_byte_zpg(oper));
+            }
+
+            0xd5 => { // CMP zpx
+                let oper = self.fetch_byte();
+                self.cmp(self.mem_get_byte_zpgx(oper));
+            }
+
+            0xcd => { // CMP abs
+                let oper = self.fetch_word();
+                self.cmp(self.mem_get_byte_abs(oper));
+            }
+
+            0xDD => { // CMP absx
+                let oper = self.fetch_word();
+                self.cmp(self.mem_get_byte_absx(oper));
+            }
+
+            0xD9 => { // CMP absy
+                let oper = self.fetch_word();
+                self.cmp(self.mem_get_byte_absy(oper));
+            }
+
+            0xC1 => { // CMP indx
+                let oper = self.fetch_byte();
+                self.cmp(self.mem_get_byte_indx(oper));
+            }
+
+            0xD1 => { // CMP indy
+                let oper = self.fetch_byte();
+                self.eor(self.mem_get_byte_indy(oper));
+            }
+
+            // CPX
+
+            0xE0 => { // CPX imm
+                let oper = self.fetch_byte();
+                self.cpx(oper);
+            }
+
+            0xE4 => { // CPX zpg
+                let oper = self.fetch_byte();
+                self.cpx(self.mem_get_byte_zpg(oper));
+            }
+
+            0xEC => { // CPX abs
+                let oper = self.fetch_word();
+                self.cpx(self.mem_get_byte_abs(oper));
+            }
+
+            // CPY
+
+            0xC0 => { // CPY imm
+                let oper = self.fetch_byte();
+                self.cpy(oper);
+            }
+
+            0xC4 => { // CPY zpg
+                let oper = self.fetch_byte();
+                self.cpy(self.mem_get_byte_zpg(oper));
+            }
+
+            0xCC => { // CPY abs
+                let oper = self.fetch_word();
+                self.cpy(self.mem_get_byte_abs(oper));
+            }
+
             // Interrupts
 
             0x00 => { // BRK
@@ -365,28 +450,108 @@ impl CPU {
 impl CPU {
     // Logic Operations
     
-    pub fn and(&mut self, m: u8) {
+    fn and(&mut self, m: u8) {
         self.a &= m;
         self.update_nz(self.a);
     }
 
-    pub fn eor(&mut self, m: u8) {
+    fn eor(&mut self, m: u8) {
         self.a ^= m;
         self.update_nz(self.a);
     }
 
-    pub fn ora(&mut self, m: u8) {
+    fn ora(&mut self, m: u8) {
         self.a |= m;
         self.update_nz(self.a);
     }
 
+    // Comparisons
+
+    fn cmp(&mut self, m: u8) {
+        let t = self.a.wrapping_sub(m);
+        self.c = self.a >= m;
+        self.n = (t & 0x80) != 0;
+        self.z = t == 0;
+
+        println!("T = {:x}", t);
+    }
+
+    fn cpx(&mut self, m: u8) {
+        let t = self.x.wrapping_sub(m);
+        self.c = self.x >= m;
+        self.n = (t & 0x80) != 0;
+        self.z = t == 0;
+    }
+
+    fn cpy(&mut self, m: u8) {
+        let t = self.y.wrapping_sub(m);
+        self.c = self.y >= m;
+        self.n = (t & 0x80) != 0;
+        self.z = t == 0;
+    }
+
     // Other
 
-    pub fn bit(&mut self, m: u8) {
+    fn bit(&mut self, m: u8) {
         let t = self.a & m;
         self.n = (m & 0x80) != 0; // TODO This could be a simple transfer if we stored the flags in a u8
         self.v = (m & 0x40) != 0;
         self.z = t == 0;
+    }
+}
+
+#[cfg(test)]
+mod operations_tests {
+    use super::*;
+
+    #[test]
+    fn test_cmp_eq() {
+        let mut cpu = CPU::new();
+        cpu.a = 0x42;
+        cpu.cmp(0x42);
+        assert_eq!(cpu.z, true);
+        assert_eq!(cpu.c, true);
+        assert_eq!(cpu.n, false);
+    }
+
+    #[test]
+    fn test_cmp_gt() {
+        let mut cpu = CPU::new();
+        cpu.a = 0x42;
+        cpu.cmp(0x21);
+        assert_eq!(cpu.z, false);
+        assert_eq!(cpu.c, true);
+        assert_eq!(cpu.n, false);
+    }
+
+    #[test]
+    fn test_cmp_gt_n() {
+        let mut cpu = CPU::new();
+        cpu.a = 0x84;
+        cpu.cmp(0x01);
+        assert_eq!(cpu.z, false);
+        assert_eq!(cpu.c, true);
+        assert_eq!(cpu.n, true);
+    }
+
+    #[test]
+    fn test_cmp_lt() {
+        let mut cpu = CPU::new();
+        cpu.a = 0x42;
+        cpu.cmp(0x84);
+        assert_eq!(cpu.z, false);
+        assert_eq!(cpu.c, false);
+        assert_eq!(cpu.n, true);
+    }
+
+    #[test]
+    fn test_cmp_lt_n() {
+        let mut cpu = CPU::new();
+        cpu.a = 0x01;
+        cpu.cmp(0x84);
+        assert_eq!(cpu.z, false);
+        assert_eq!(cpu.c, false);
+        assert_eq!(cpu.n, false);
     }
 }
 
