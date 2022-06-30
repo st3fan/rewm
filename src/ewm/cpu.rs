@@ -31,6 +31,9 @@ pub struct CPU {
 
     pub n: bool,
     pub v: bool,
+    pub b: bool,
+    pub d: bool,
+    pub i: bool,
     pub z: bool,
     pub c: bool,
 
@@ -44,7 +47,7 @@ impl CPU {
         CPU {
             pc: 0x0400, sp: 0xff,
             a: 0, x: 0, y: 0,
-            n: false, v: false, z: false, c: false,
+            n: false, v: false, b: false, d: false, i: false, z: false, c: false,
             ram: vec![0; 64*1024]
         }
     }
@@ -92,6 +95,50 @@ pub enum CPUError {
     IllegalOpcode,
 }
 
+// Status
+
+impl CPU {
+    fn get_status(&self) -> u8 {
+        let mut status = 0;
+        if self.n { status |= 0b10000000; }
+        if self.v { status |= 0b01000000; }
+        if self.b { status |= 0b00010000; }
+        if self.d { status |= 0b00001000; }
+        if self.i { status |= 0b00000100; }
+        if self.z { status |= 0b00000010; }
+        if self.c { status |= 0b00000001; }
+        status
+    }
+
+    fn set_status(&mut self, status: u8) {
+        self.n = (status & 0b10000000) != 0;
+        self.v = (status & 0b01000000) != 0;
+        self.b = (status & 0b00010000) != 0;
+        self.d = (status & 0b00001000) != 0;
+        self.i = (status & 0b00000100) != 0;
+        self.z = (status & 0b00000010) != 0;
+        self.c = (status & 0b00000001) != 0;
+    }
+}
+
+// Modifiers
+
+fn asl(b: u8) -> u8 {
+    b
+}
+
+fn lsr(b: u8) -> u8 {
+    b
+}
+
+fn rol(b: u8) -> u8 {
+    b
+}
+
+fn ror(b: u8) -> u8 {
+    b
+}
+
 //
 
 impl CPU {
@@ -114,8 +161,7 @@ impl CPU {
 
     fn pull_byte(&mut self) -> u8 {
         self.sp += 1;
-        let b = self.ram[0x0100 + self.sp as usize];
-        b
+        self.ram[0x0100 + self.sp as usize]
     }
 
     fn push_word(&mut self, w: u16) {
@@ -141,41 +187,315 @@ impl CPU {
         match opcode {
             // Transfer Instructions
 
-            0xa9 => { /* LDA imm */ 
+            // LDA
+
+            0xA9 => { // LDA imm
                 self.a = self.fetch_byte();
+                self.update_nz(self.a);
             }
-            0xad => { /* LDA abs */
-                let addr = self.fetch_word();
-                self.a = self.get_byte(addr);
+
+            0xA5 => { // LDA zpg
+                let oper = self.fetch_byte();
+                self.a = self.mem_get_byte_zpg(oper);
+                self.update_nz(self.a);
             }
-            0xa2 => { /* LDX imm (NZ) */ 
+
+            0xB5 => { // LDA zpgx
+                let oper = self.fetch_byte();
+                self.a = self.mem_get_byte_zpgx(oper);
+                self.update_nz(self.a);
+            }
+
+            0xAD => { // LDA abs
+                let oper = self.fetch_word();
+                self.a = self.mem_get_byte_abs(oper);
+                self.update_nz(self.a);
+            }
+
+            0xBD => { // LDA absx
+                let oper = self.fetch_word();
+                self.a = self.mem_get_byte_absx(oper);
+                self.update_nz(self.a);
+            }
+
+            0xB9 => { // LDA absy
+                let oper = self.fetch_word();
+                self.a = self.mem_get_byte_absy(oper);
+                self.update_nz(self.a);
+            }
+
+            0xA1 => { // LDA indx
+                let oper = self.fetch_byte();
+                self.a = self.mem_get_byte_indx(oper);
+                self.update_nz(self.a);
+            }
+
+            0xB1 => { // LDA indy
+                let oper = self.fetch_byte();
+                self.a = self.mem_get_byte_indy(oper);
+                self.update_nz(self.a);
+            }
+
+            // LDX
+
+            0xA2 => { // LDX imm
                 self.x = self.fetch_byte();
                 self.update_nz(self.x);
             }
-            0xae => { /* LDX abs (NZ) */ 
-                let addr = self.fetch_word();
-                self.x = self.get_byte(addr);
+
+            0xA6 => { // LDX zpg
+                let oper = self.fetch_byte();
+                self.x = self.mem_get_byte_zpg(oper);
                 self.update_nz(self.x);
             }
-            0xa0 => { /* LDY imm (NZ) */ 
+
+            0xB6 => { // LDX zpgy
+                let oper = self.fetch_byte();
+                self.x = self.mem_get_byte_zpgy(oper);
+                self.update_nz(self.x);
+            }
+
+            0xAE => { // LDX abs
+                let oper = self.fetch_word();
+                self.x = self.mem_get_byte_abs(oper);
+                self.update_nz(self.x);
+            }
+
+            0xBE => { // LDX absy
+                let oper = self.fetch_word();
+                self.x = self.mem_get_byte_absy(oper);
+                self.update_nz(self.x);
+            }
+
+            // LDY
+
+            0xA0 => { // LDY imm
                 self.y = self.fetch_byte();
                 self.update_nz(self.y);
             }
-            0xac => { /* LDY abs (NZ) */ 
-                let addr = self.fetch_word();
-                self.y = self.get_byte(addr);
+
+            0xA4 => { // LDY zpg
+                let oper = self.fetch_byte();
+                self.y = self.mem_get_byte_zpg(oper);
                 self.update_nz(self.y);
+            }
+
+            0xB4 => { // LDY zpgx
+                let oper = self.fetch_byte();
+                self.y = self.mem_get_byte_zpgx(oper);
+                self.update_nz(self.y);
+            }
+
+            0xAC => { // LDY abs
+                let oper = self.fetch_word();
+                self.y = self.mem_get_byte_abs(oper);
+                self.update_nz(self.y);
+            }
+
+            0xBC => { // LDY absx
+                let oper = self.fetch_word();
+                self.y = self.mem_get_byte_absx(oper);
+                self.update_nz(self.y);
+            }
+
+            // STA
+
+            0x85 => { // STA zpg
+                let oper = self.fetch_byte();
+                self.mem_set_byte_zpg(oper, self.a);
+            }
+
+            0x95 => { // STA zpgx
+                let oper = self.fetch_byte();
+                self.mem_set_byte_zpgx(oper, self.a);
+            }
+
+            0x8D => { // STA abs
+                let oper = self.fetch_word();
+                self.mem_set_byte_abs(oper, self.a);
+            }
+
+            0x9D => { // STA absx
+                let oper = self.fetch_word();
+                self.mem_set_byte_absx(oper, self.a);
+            }
+
+            0x99 => { // STA absy
+                let oper = self.fetch_word();
+                self.mem_set_byte_absy(oper, self.a);
+            }
+
+            0x81 => { // STA indx
+                let oper = self.fetch_byte();
+                self.mem_set_byte_indx(oper, self.a);
+            }
+
+            0x91 => { // STA indy
+                let oper = self.fetch_byte();
+                self.mem_set_byte_indy(oper, self.a);
+            }
+
+            // STX
+
+            0x86 => { // STX zpg
+                let oper = self.fetch_byte();
+                self.mem_set_byte_zpg(oper, self.x);
+            }
+
+            0x96 => { // STX zpgy
+                let oper = self.fetch_byte();
+                self.mem_set_byte_zpgy(oper, self.x);
+            }
+
+            0x8E => { // STX abs
+                let oper = self.fetch_word();
+                self.mem_set_byte_abs(oper, self.x);
+            }
+
+            // STY
+
+            0x84 => { // STY zpg
+                let oper = self.fetch_byte();
+                self.mem_set_byte_zpg(oper, self.y);
+            }
+
+            0x94 => { // STY zpgx
+                let addr = self.fetch_byte();
+                self.mem_set_byte_zpgx(addr, self.y);
+            }
+
+            0x8C => { // STY abs
+                let oper = self.fetch_word();
+                self.mem_set_byte_abs(oper, self.y);
+            }
+
+            // Transfer between registers
+
+            0xAA => { // TAX
+                self.x = self.a;
+                self.update_nz(self.x);
+            }
+
+            0xA8 => { // TAY
+                self.y = self.a;
+                self.update_nz(self.y);
+            }
+
+            0xBA => { // TSX
+                self.x = self.sp;
+                self.update_nz(self.x);
+            }
+
+            0x8A => { // TXA
+                self.a = self.x;
+                self.update_nz(self.a);
+            }
+
+            0x9A => { // TXS
+                self.sp = self.x;
+            }
+
+            0x98 => { // TYA
+                self.a = self.y;
+                self.update_nz(self.a);
+            }
+
+            // Stack Instructions
+
+            0x48 => { // PHA
+                self.push_byte(self.a);
+            }
+
+            0x08 => { // PHP
+                let oper = self.get_status() | 0b00110000;
+                self.push_byte(oper);
+            }
+
+            0x68 => { // PLA
+                self.a = self.pull_byte();
+                self.update_nz(self.a);
+            }
+
+            0x28 => { // PLP
+                let oper = self.pull_byte();
+                self.set_status(oper);
             }
 
             // Decrements & Increments
 
+            0xE6 => { // INC zpg
+                let oper = self.fetch_byte();
+                let v = self.get_byte(oper as u16).wrapping_add(1);
+                self.set_byte(oper as u16, v);
+                self.update_nz(v);
+            }
+    
+            0xF6 => { // INC zpx
+                let oper = self.fetch_byte();
+                let v = self.get_byte((oper + self.x) as u16).wrapping_add(1);
+                self.set_byte((oper + self.x) as u16, v);
+                self.update_nz(v);
+            }
+
+            0xEE => { // INC abs
+                let oper = self.fetch_word();
+                let v = self.get_byte(oper).wrapping_add(1);
+                self.set_byte(oper, v);
+                self.update_nz(v);
+            }
+
+            0xFE => { // INC absx
+                let oper = self.fetch_word();
+                let v = self.get_byte(oper + self.x as u16).wrapping_add(1);
+                self.set_byte(oper + self.x as u16, v);
+                self.update_nz(v);
+            }
+
             0xe8 => { // INX (NZ)
-                self.x += 1;
+                self.x = self.x.wrapping_add(1);
                 self.update_nz(self.x);
             }
 
             0xc8 => { // INY (NZ)
-                self.y += 1;
+                self.y = self.y.wrapping_add(1);
+                self.update_nz(self.y);
+            }
+
+            0xC6 => { // DEC zpg
+                let oper = self.fetch_byte();
+                let v = self.get_byte(oper as u16).wrapping_sub(1);
+                self.set_byte(oper as u16, v);
+                self.update_nz(v);
+            }
+    
+            0xD6 => { // DEC zpx
+                let oper = self.fetch_byte();
+                let v = self.get_byte((oper + self.x) as u16).wrapping_sub(1);
+                self.set_byte((oper + self.x) as u16, v);
+                self.update_nz(v);
+            }
+
+            0xCE => { // DEC abs
+                let oper = self.fetch_word();
+                let v = self.get_byte(oper).wrapping_sub(1);
+                self.set_byte(oper, v);
+                self.update_nz(v);
+            }
+
+            0xDE => { // DEC absx
+                let oper = self.fetch_word();
+                let v = self.get_byte(oper + self.x as u16).wrapping_sub(1);
+                self.set_byte(oper + self.x as u16, v);
+                self.update_nz(v);
+            }
+
+            0xCA => { // DEX (NZ)
+                self.x = self.x.wrapping_sub(1);
+                self.update_nz(self.x);
+            }
+
+            0x88 => { // DEY (NZ)
+                self.y = self.y.wrapping_sub(1);
                 self.update_nz(self.y);
             }
 
@@ -328,6 +648,134 @@ impl CPU {
                 self.eor(self.mem_get_byte_indy(oper));
             }
 
+            // Shift & Rotate Instructions
+
+            0x0A => { // ASL
+                self.a = asl(self.a);
+            }
+
+            0x06 => { // ASL zpg
+                let addr = self.fetch_byte();
+                self.mem_mod_byte_zpg(addr, asl);
+            }
+
+            0x16 => { // ASL zpgx
+                let addr = self.fetch_byte();
+                self.mem_mod_byte_zpgx(addr, asl);
+            }
+
+            0x0E => { // ASL abs
+                let addr = self.fetch_word();
+                self.mem_mod_byte_abs(addr, asl);
+            }
+
+            0x1E => { // ASL absx
+                let addr = self.fetch_word();
+                self.mem_mod_byte_absx(addr, asl);
+            }
+
+            0x4A => { // LSR
+                self.a = lsr(self.a);
+            }
+
+            0x46 => { // LSR zpg
+                let addr = self.fetch_byte();
+                self.mem_mod_byte_zpg(addr, lsr);
+            }
+
+            0x56 => { // LSR zpgx
+                let addr = self.fetch_byte();
+                self.mem_mod_byte_zpgx(addr, lsr);
+            }
+
+            0x4E => { // LSR abs
+                let addr = self.fetch_word();
+                self.mem_mod_byte_abs(addr, lsr);
+            }
+
+            0x5E => { // LSR absx
+                let addr = self.fetch_word();
+                self.mem_mod_byte_absx(addr, lsr);
+            }
+
+            0x2A => { // ROL
+                self.a = rol(self.a);
+            }
+
+            0x26 => { // ROL zpg
+                let addr = self.fetch_byte();
+                self.mem_mod_byte_zpg(addr, rol);
+            }
+
+            0x36 => { // ROL zpgx
+                let addr = self.fetch_byte();
+                self.mem_mod_byte_zpgx(addr, rol);
+            }
+
+            0x2E => { // ROL abs
+                let addr = self.fetch_word();
+                self.mem_mod_byte_abs(addr, rol);
+            }
+
+            0x3E => { // ROL absx
+                let addr = self.fetch_word();
+                self.mem_mod_byte_absx(addr, rol);
+            }
+
+            0x6A => { // ROR
+                self.a = ror(self.a);
+            }
+
+            0x66 => { // ROR zpg
+                let addr = self.fetch_byte();
+                self.mem_mod_byte_zpg(addr, ror);
+            }
+
+            0x76 => { // ROR zpgx
+                let addr = self.fetch_byte();
+                self.mem_mod_byte_zpgx(addr, ror);
+            }
+
+            0x6E => { // ROR abs
+                let addr = self.fetch_word();
+                self.mem_mod_byte_abs(addr, ror);
+            }
+
+            0x7E => { // ROR absx
+                let addr = self.fetch_word();
+                self.mem_mod_byte_absx(addr, ror);
+            }
+
+            // Flag Instructions
+
+            0x18 => { // CLC
+                self.c = false;
+            }
+
+            0xD8 => { // CLD
+                self.d = false;
+            }
+
+            0x58 => { // CLI
+                self.i = false;
+            }
+
+            0xB8 => { // CLV
+                self.v = false;
+            }
+
+            0x38 => { // SEC
+                self.c = true;
+            }
+
+            0xF8 => { // SED
+                self.d = true;
+            }
+
+            0x78 => { // SEI
+                self.i = true;
+            }
+
             // Comparisons
             
             // CMP
@@ -406,6 +854,64 @@ impl CPU {
                 self.cpy(self.mem_get_byte_abs(oper));
             }
 
+            // Branches
+
+            0x90 => { // BCC
+                let oper = self.fetch_byte();
+                if !self.c {
+                    self.pc = self.pc.wrapping_add(oper as u16);
+                }
+            }
+
+            0xB0 => { // BCS
+                let oper = self.fetch_byte();
+                if self.c {
+                    self.pc = self.pc.wrapping_add(oper as u16);
+                }
+            }
+
+            0xF0 => { // BEQ
+                let oper = self.fetch_byte();
+                if self.z {
+                    self.pc = self.pc.wrapping_add(oper as u16);
+                }
+            }
+
+            0x30 => { // BMI
+                let oper = self.fetch_byte();
+                if self.n {
+                    self.pc = self.pc.wrapping_add(oper as u16);
+                }
+            }
+
+            0xD0 => { // BNE
+                let oper = self.fetch_byte();
+                if !self.z {
+                    self.pc = self.pc.wrapping_add(oper as u16);
+                }
+            }
+
+            0x10 => { // BPL
+                let oper = self.fetch_byte();
+                if !self.n {
+                    self.pc = self.pc.wrapping_add(oper as u16);
+                }
+            }
+
+            0x50 => { // BVC
+                let oper = self.fetch_byte();
+                if !self.v {
+                    self.pc = self.pc.wrapping_add(oper as u16);
+                }
+            }
+
+            0x70 => { // BVS
+                let oper = self.fetch_byte();
+                if self.v {
+                    self.pc = self.pc.wrapping_add(oper as u16);
+                }
+            }
+
             // Interrupts
 
             0x00 => { // BRK
@@ -420,7 +926,7 @@ impl CPU {
 
             // Other
             
-            0x24 => { // BIT zp
+            0x24 => { // BIT zpg
                 let oper = self.fetch_byte();
                 self.bit(self.mem_get_byte_zpg(oper));
             }
@@ -472,8 +978,6 @@ impl CPU {
         self.c = self.a >= m;
         self.n = (t & 0x80) != 0;
         self.z = t == 0;
-
-        println!("T = {:x}", t);
     }
 
     fn cpx(&mut self, m: u8) {
@@ -558,6 +1062,8 @@ mod operations_tests {
 // TODO How to split this up into cpu_addressing.rs
 
 impl CPU {
+    // Getters
+
     pub fn mem_get_byte_zpg(&self, addr: u8) -> u8 {
         self.get_byte(addr as u16)
     }
@@ -582,16 +1088,67 @@ impl CPU {
         self.get_byte(addr.wrapping_add(self.y as u16))
     }
 
-    // TODO 65C02 and use for JMP?
-    // pub fn mem_get_byte_ind(&self, addr: u8) -> u8 {
-    // }
-
     pub fn mem_get_byte_indx(&self, addr: u8) -> u8 {
         self.get_byte(self.get_word(addr.wrapping_add(self.x) as u16))
     }
 
     pub fn mem_get_byte_indy(&self, addr: u8) -> u8 {
         self.get_byte(self.get_word(addr as u16).wrapping_add(self.y as u16))
+    }
+
+    // Setters
+
+    pub fn mem_set_byte_zpg(&mut self, addr: u8, b: u8) {
+        self.set_byte(addr as u16, b);
+    }
+
+    pub fn mem_set_byte_zpgx(&mut self, addr: u8, b: u8) {
+        self.set_byte(addr.wrapping_add(self.x) as u16, b);
+    }
+
+    pub fn mem_set_byte_zpgy(&mut self, addr: u8, b: u8) {
+        self.set_byte(addr.wrapping_add(self.y) as u16, b);
+    }
+
+    pub fn mem_set_byte_abs(&mut self, addr: u16, b: u8) {
+        self.set_byte(addr, b);
+    }
+
+    pub fn mem_set_byte_absx(&mut self, addr: u16, b: u8) {
+        self.set_byte(addr.wrapping_add(self.x as u16), b);
+    }
+
+    pub fn mem_set_byte_absy(&mut self, addr: u16, b: u8) {
+        self.set_byte(addr.wrapping_add(self.y as u16), b);
+    }
+
+    pub fn mem_set_byte_indx(&mut self, addr: u8, b: u8) {
+        self.set_byte(self.get_word(addr.wrapping_add(self.x) as u16), b);
+    }
+
+    pub fn mem_set_byte_indy(&mut self, addr: u8, b: u8) {
+        self.set_byte(self.get_word(addr as u16).wrapping_add(self.y as u16), b);
+    }
+
+    // Modifiers
+
+    pub fn mod_byte(&mut self, addr: u16, modifier: fn(u8) -> u8) {
+    }
+
+    pub fn mem_mod_byte_zpg(&mut self, addr: u8, modifier: fn(u8) -> u8) {
+        self.mod_byte(addr as u16, modifier);
+    }
+
+    pub fn mem_mod_byte_zpgx(&mut self, addr: u8, modifier: fn(u8) -> u8) {
+        self.mod_byte(addr as u16, modifier);
+    }
+
+    pub fn mem_mod_byte_abs(&mut self, addr: u16, modifier: fn(u8) -> u8) {
+        self.mod_byte(addr as u16, modifier);
+    }
+
+    pub fn mem_mod_byte_absx(&mut self, addr: u16, modifier: fn(u8) -> u8) {
+        self.mod_byte(addr as u16, modifier);
     }
 }
 
@@ -811,5 +1368,61 @@ mod computer_tests {
         assert_eq!(cpu.pc, 0x0403);
         assert_eq!(cpu.a, 0x42);
         assert_eq!(cpu.sp, 0xff);
+    }
+
+    #[test]
+    fn test_inx_wrapping() {
+        let mut cpu = CPU::new();
+        cpu.load(0x0400, vec![
+            0xA2, 0xFF,         // $0400 LDX #$FF
+            0xE8,               // $0402 INX
+            0x00,               // $0403 BRK
+        ]);
+
+        assert_eq!(cpu.run().unwrap_err(), CPUError::Break);
+        assert_eq!(cpu.pc, 0x0403);
+        assert_eq!(cpu.x, 0x00);
+    }
+
+    #[test]
+    fn test_dex_wrapping() {
+        let mut cpu = CPU::new();
+        cpu.load(0x0400, vec![
+            0xA2, 0x00,         // $0400 LDX #$00
+            0xCA,               // $0402 DEX
+            0x00,               // $0403 BRK
+        ]);
+
+        assert_eq!(cpu.run().unwrap_err(), CPUError::Break);
+        assert_eq!(cpu.pc, 0x0403);
+        assert_eq!(cpu.x, 0xFF);
+    }
+
+    #[test]
+    fn test_beq() {
+        let mut cpu = CPU::new();
+        cpu.load(0x0400, vec![
+            0xA2, 0x00,         // $0400 LDX #$00
+            0xF0, 0x01,         // $0403 BEQ +1 ($0402)
+            0x00,               // $0404 BRK
+            0x00,               // $0405 BRK
+        ]);
+
+        assert_eq!(cpu.run().unwrap_err(), CPUError::Break);
+        assert_eq!(cpu.pc, 0x0405);
+    }
+
+    #[test]
+    fn test_bne() {
+        let mut cpu = CPU::new();
+        cpu.load(0x0400, vec![
+            0xA2, 0x00,         // $0400 LDX #$00
+            0xD0, 0x01,         // $0403 BNE +1 ($0402)
+            0x00,               // $0404 BRK
+            0x00,               // $0405 BRK
+        ]);
+
+        assert_eq!(cpu.run().unwrap_err(), CPUError::Break);
+        assert_eq!(cpu.pc, 0x0404);
     }
 }
