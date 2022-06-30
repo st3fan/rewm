@@ -499,6 +499,88 @@ impl CPU {
                 self.update_nz(self.y);
             }
 
+            // Arithmetic Operations
+
+            0x69 => { // ADC immediate
+                let m = self.fetch_byte();
+                self.adc(m)
+            }
+
+            0x65 => { // ADC zpg
+                let addr = self.fetch_byte();
+                self.adc(self.mem_get_byte_zpg(addr));
+            }
+
+            0x75 => { // ADC zpgx
+                let addr = self.fetch_byte();
+                self.adc(self.mem_get_byte_zpgx(addr));
+            }
+
+            0x6D => { // ADC abs
+                let addr = self.fetch_word();
+                self.adc(self.mem_get_byte_abs(addr));
+            }
+
+            0x7D => { // ADC absx
+                let addr = self.fetch_word();
+                self.adc(self.mem_get_byte_absx(addr));
+            }
+
+            0x79 => { // ADC absy
+                let addr = self.fetch_word();
+                self.adc(self.mem_get_byte_absy(addr));
+            }
+
+            0x61 => { // ADC indx
+                let addr = self.fetch_byte();
+                self.adc(self.mem_get_byte_indx(addr));
+            }
+
+            0x71 => { // ADC indy
+                let addr = self.fetch_byte();
+                self.adc(self.mem_get_byte_indy(addr));
+            }
+
+            0xE9 => { // SBC immediate
+                let m = self.fetch_byte();
+                self.sbc(m)
+            }
+
+            0xE5 => { // SBC zpg
+                let addr = self.fetch_byte();
+                self.sbc(self.mem_get_byte_zpg(addr));
+            }
+
+            0xF5 => { // SBC zpgx
+                let addr = self.fetch_byte();
+                self.sbc(self.mem_get_byte_zpgx(addr));
+            }
+
+            0xED => { // SBC abs
+                let addr = self.fetch_word();
+                self.sbc(self.mem_get_byte_abs(addr));
+            }
+
+            0xFD => { // SBC absx
+                let addr = self.fetch_word();
+                self.sbc(self.mem_get_byte_absx(addr));
+            }
+
+            0xF9 => { // SBC absy
+                let addr = self.fetch_word();
+                self.sbc(self.mem_get_byte_absy(addr));
+            }
+
+            0xE1 => { // SBC indx
+                let addr = self.fetch_byte();
+                self.sbc(self.mem_get_byte_indx(addr));
+            }
+
+            0xF1 => { // SBC indy
+                let addr = self.fetch_byte();
+                self.sbc(self.mem_get_byte_indy(addr));
+            }
+
             // Jumps & Subroutines
 
             0x4c => { // JMP abs
@@ -1001,6 +1083,14 @@ impl CPU {
         self.n = (m & 0x80) != 0; // TODO This could be a simple transfer if we stored the flags in a u8
         self.v = (m & 0x40) != 0;
         self.z = t == 0;
+    }
+
+    fn adc(&mut self, m: u8) {
+        // TODO
+    }
+
+    fn sbc(&mut self, m: u8) {
+        // TODO
     }
 }
 
